@@ -32,7 +32,10 @@ SYNONYM = {
     "memori": "memory", "ingatan": "memory", "peta": "map", "gambar": "visual diagram",
     "diagram": "diagram", "hemat": "token saving", "jualan": "sales marketing",
     "iklan": "sales marketing", "lowongan": "jobs cv", "loker": "jobs cv",
-    "riset": "research", "cari": "search research", "pasar": "market research",
+    "riset": "research", "pasar": "market research",
+    # "cari" alone means search; it used to also inject "research", which made
+    # "cari skill" rank research repos above the skills registry (found 28/10)
+    "cari": "search",
     "keamanan": "security", "uang": "payment", "bayar": "payment",
     "hadiah": "reward", "suara": "voice audio", "musik": "music audio",
     "web": "web", "desainer": "design", "tabel": "document excel spreadsheet",
@@ -218,6 +221,8 @@ def test():
         ("hemat token", "JuliusBrussee/caveman"),
         ("logo produk", "kaankiziltug/logo-design-skill"),
         ("panduan ui web", "vercel-labs/web-interface-guidelines"),
+        ("cari skill", "vercel-labs/skills"),
+        ("daftar skill", "vercel-labs/skills"),
     ]
     if len(c) >= 20:
         missed = [f"{q} -> {want}" for q, want in must_find
