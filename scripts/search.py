@@ -20,6 +20,26 @@ STOP = {"the", "a", "an", "and", "or", "for", "with", "make", "want", "need", "p
         "how", "what", "some", "any", "can", "you", "me", "i", "we", "do", "does", "be"}
 LABEL = {"installed": "INSTALLED", "missing": "NOT YET", "rejected": "REJECTED"}
 
+# Catalog fields are English (agents read them), but the owner searches in Indonesian.
+# Map the words he actually types onto the English terms used in tags/purpose.
+SYNONYM = {
+    "kode": "code", "ngoding": "code", "coding": "code", "program": "code",
+    "desain": "design", "tampilan": "web ui ux website", "ui": "ui", "ux": "ux",
+    "website": "website web", "situs": "website web", "halaman": "web page",
+    "video": "video", "presentasi": "presentation slides", "slide": "presentation slides",
+    "dokumen": "document", "ppt": "presentation pptx", "powerpoint": "presentation pptx",
+    "tulisan": "writing", "nulis": "writing", "naskah": "writing academic",
+    "memori": "memory", "ingatan": "memory", "peta": "map", "gambar": "visual diagram",
+    "diagram": "diagram", "hemat": "token saving", "jualan": "sales marketing",
+    "iklan": "sales marketing", "lowongan": "jobs cv", "loker": "jobs cv",
+    "riset": "research", "cari": "search research", "pasar": "market research",
+    "keamanan": "security", "uang": "payment", "bayar": "payment",
+    "hadiah": "reward", "suara": "voice audio", "musik": "music audio",
+    "web": "web", "desainer": "design", "tabel": "document excel spreadsheet",
+    "excel": "excel spreadsheet", "word": "word document", "pdf": "pdf document",
+    "reels": "video reels short", "animasi": "video animation",
+}
+
 
 def load():
     lines = DATA.read_text(encoding="utf-8").splitlines()
@@ -27,22 +47,39 @@ def load():
 
 
 def search(catalog, words, status=None):
-    keys = [w.lower() for w in words.split() if w.strip() and w.lower() not in STOP]
+    keys = []
+    for w in words.lower().split():
+        if not w.strip() or w in STOP:
+            continue
+        # expand one Indonesian word into the English terms the catalog actually uses
+        keys.extend(SYNONYM.get(w, w).split())
     found = []
     for r in catalog:
         if status and r.get("status") != status:
             continue
+        # dont_use_when is excluded on purpose: it names what the repo is NOT for,
+        # so matching it produces false hits ("not for design tasks" hits "design").
         hay = " ".join(str(r.get(k, "")) for k in
-                       ("name", "repo", "purpose", "use_when", "dont_use_when", "tags")).lower()
-        hits = 0
+                       ("name", "repo", "purpose", "use_when", "tags")).lower()
+        strong_hay = (str(r.get("name", "")) + " " + str(r.get("tags", ""))).lower()
+        hits = strong = 0
         for k in keys:
             # short words must match whole ("ui" must not match "build"); longer words may be partial
-            if (re.search(rf"\b{re.escape(k)}\b", hay) if len(k) <= 3 else k in hay):
+            whole = len(k) <= 3
+            if ((re.search(rf"\b{re.escape(k)}\b", hay) if whole else k in hay)):
                 hits += 1
+                if (re.search(rf"\b{re.escape(k)}\b", strong_hay) if whole else k in strong_hay):
+                    strong += 1
         if keys and hits == 0:
             continue
-        found.append((hits, r))
-    found.sort(key=lambda x: (-x[0], -x[1].get("stars", 0)))
+        # drop weak matches: one shared word out of many ("the web" in a research repo) is noise
+        if keys and hits < (2 if len(keys) >= 4 else 1):
+            continue
+        # a match on name/tags is worth more than one buried in prose
+        found.append((strong * 2 + (hits - strong), r))
+    # ties: prefer what the office already has, then popularity
+    RANK = {"installed": 0, "missing": 1, "rejected": 2}
+    found.sort(key=lambda x: (-x[0], RANK.get(x[1].get("status"), 3), -x[1].get("stars", 0)))
     return [r for _, r in found]
 
 
@@ -125,7 +162,18 @@ def test():
     assert any("ui-ux" in r["repo"] or "taste" in r["repo"] for r in res), "design repos not found"
     assert not search(c, "zzz-nothing-here"), "gibberish query returned results"
     assert all(r["status"] == "missing" for r in search(c, "code", status="missing"))
-    print(f"PASS: {len(c)} repos, search works, status filter works, rejected rows carry reasons")
+    # Indonesian queries must resolve through the synonym map (needs a real catalog)
+    if len(c) >= 20:
+        for q in ("kode", "desain", "video", "presentasi", "tulisan", "memori", "peta"):
+            assert search(c, q), f"Indonesian query '{q}' returned nothing"
+    # a long query must not drag in repos that share one generic word
+    long_q = search(c, "website ui ux redesign landing page prettier")
+    names = [r["repo"] for r in long_q]
+    assert names, "long design query returned nothing"
+    assert not any("ppt-master" in n or "hyperframes" in n for n in names), \
+        f"long query pulled in unrelated repos: {names}"
+    print(f"PASS: {len(c)} repos, search works, status filter works, "
+          f"rejected rows carry reasons, weak matches dropped")
 
 
 def main():
