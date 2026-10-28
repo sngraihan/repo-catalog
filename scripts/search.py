@@ -48,6 +48,10 @@ SYNONYM = {
     "contek": "extract clone reference", "sontek": "extract clone reference",
     "panduan": "guidelines rules", "aturan": "guidelines rules", "pedoman": "guidelines rules",
     "cek": "audit review", "periksa": "audit review", "nilai": "audit review",
+    # gaps found 28/10 by probing Indonesian queries that returned nothing useful
+    "efek": "effect animation", "teks": "text typography", "bergerak": "animation motion",
+    "kontras": "contrast wcag", "warna": "colour color", "ukuran": "size layout",
+    "laporan": "report", "kerja": "work", "hasil": "report output", "cetak": "export print",
 }
 
 
@@ -72,21 +76,33 @@ def search(catalog, words, status=None):
         hay = " ".join(str(r.get(k, "")) for k in
                        ("name", "repo", "purpose", "use_when", "tags")).lower()
         strong_hay = (str(r.get("name", "")) + " " + str(r.get("tags", ""))).lower()
-        hits = strong = 0
+        # readme words are evidence too, but the weakest kind: every README is full of
+        # generic vocabulary, so a readme hit must never outrank a curated field hit.
+        readme_hay = str(r.get("readme", "")).lower()
+        hits = strong = soft = 0
         for k in keys:
             # short words must match whole ("ui" must not match "build"); longer words may be partial
             whole = len(k) <= 3
-            if ((re.search(rf"\b{re.escape(k)}\b", hay) if whole else k in hay)):
+            here = bool(re.search(rf"\b{re.escape(k)}\b", hay) if whole else k in hay)
+            if here:
                 hits += 1
                 if (re.search(rf"\b{re.escape(k)}\b", strong_hay) if whole else k in strong_hay):
                     strong += 1
-        if keys and hits == 0:
-            continue
-        # drop weak matches: one shared word out of many ("the web" in a research repo) is noise
-        if keys and hits < (2 if len(keys) >= 4 else 1):
-            continue
-        # a match on name/tags is worth more than one buried in prose
-        found.append((strong * 2 + (hits - strong), r))
+            elif (re.search(rf"\b{re.escape(k)}\b", readme_hay) if whole else k in readme_hay):
+                soft += 1
+        if keys:
+            if hits == 0:
+                # readme-only match needs near-total coverage, otherwise every long README
+                # answers every query (e.g. "tokens" appearing in a video repo's blurb)
+                need = len(keys) if len(keys) <= 2 else max(2, (len(keys) + 1) // 2)
+                if soft < need:
+                    continue
+            # drop weak matches: one shared word out of many ("the web" in a research repo) is noise
+            elif hits < (2 if len(keys) >= 4 else 1):
+                if soft < len(keys):
+                    continue
+        # a match on name/tags is worth more than one buried in prose, and prose more than the readme
+        found.append((strong * 4 + (hits - strong) * 2 + soft, r))
     # ties: prefer what the office already has, then popularity
     RANK = {"installed": 0, "missing": 1, "rejected": 2}
     found.sort(key=lambda x: (-x[0], RANK.get(x[1].get("status"), 3), -x[1].get("stars", 0)))
@@ -223,11 +239,26 @@ def test():
         ("panduan ui web", "vercel-labs/web-interface-guidelines"),
         ("cari skill", "vercel-labs/skills"),
         ("daftar skill", "vercel-labs/skills"),
+        # these three only pass once the readme field exists: the words are in the
+        # README, not in the one-sentence purpose we wrote by hand
+        ("efek teks bergerak", "DavidHDev/react-bits"),
+        ("cek kontras warna", "Manavarya09/design-extract"),
+        ("laporan hasil kerja", "kharmanskyi/open-steps"),
     ]
     if len(c) >= 20:
         missed = [f"{q} -> {want}" for q, want in must_find
                   if want not in [r["repo"] for r in search(c, q)[:3]]]
         assert not missed, "queries that lost their intended repo: " + "; ".join(missed)
+
+    # precision: nonsense must return nothing, not everything
+    for q in ("zzz", "asdf", "makan bakso", "harga sepeda"):
+        assert not search(c, q), f"nonsense query '{q}' returned results"
+
+    # the readme field feeds weak matching; if it silently disappeared, search would
+    # still pass but with less vocabulary - so assert it is actually there
+    if len(c) >= 20:
+        missing_readme = [r["repo"] for r in c if not r.get("readme")]
+        assert not missing_readme, f"rows without readme words: {missing_readme} (run sync_readme.py)"
 
     # a long query must not drag in repos that share one generic word
     long_q = search(c, "website ui ux redesign landing page prettier")
