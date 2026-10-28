@@ -100,18 +100,43 @@ def web(catalog):
     rows = []
     for r in sorted(catalog, key=lambda x: (x.get("status") != "installed", -x.get("stars", 0))):
         cls = {"installed": "ok", "rejected": "no"}.get(r.get("status"), "")
+        status = {"installed": "installed", "missing": "not yet", "rejected": "rejected"}.get(
+            r.get("status"), r.get("status", ""))
         rows.append(
-            f'<tr class="{cls}"><td><b>{html.escape(r["name"])}</b><br>'
+            f'<tr class="{cls}"><td data-l="repo"><b>{html.escape(r["name"])}</b>'
             f'<a href="https://github.com/{html.escape(r["repo"])}">{html.escape(r["repo"])}</a></td>'
-            f'<td>{r.get("stars", 0):,}</td><td>{html.escape(str(r.get("license", "")))}</td>'
-            f'<td>{html.escape(str(r.get("status", "")))}</td>'
-            f'<td>{html.escape(r.get("purpose", ""))}<br><i>{html.escape(r.get("dont_use_when") or "")}</i></td></tr>')
-    return f"""<!doctype html><meta charset="utf-8"><title>Repo catalog</title>
-<style>body{{font:15px/1.5 system-ui;margin:24px;background:#0d1117;color:#c9d1d9}}
-table{{border-collapse:collapse;width:100%}}td,th{{padding:8px;border-bottom:1px solid #30363d;vertical-align:top}}
-a{{color:#58a6ff}}tr.ok td{{background:#0d2818}}tr.no td{{background:#2d1416;opacity:.7}}i{{color:#8b949e}}</style>
-<h2>Repo catalog ({len(catalog)})</h2><table><tr><th>Repo</th><th>Stars</th><th>License</th><th>Status</th><th>Purpose</th></tr>
-{chr(10).join(rows)}</table>"""
+            f'<td data-l="stars">{r.get("stars", 0):,}</td>'
+            f'<td data-l="license">{html.escape(str(r.get("license", "")))}</td>'
+            f'<td data-l="status">{html.escape(status)}</td>'
+            f'<td data-l="what">{html.escape(r.get("purpose", ""))}'
+            f'<i>{html.escape(r.get("dont_use_when") or "")}</i></td></tr>')
+    return f"""<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Repo catalog</title>
+<style>
+:root{{color-scheme:dark}}
+body{{font:16px/1.5 system-ui,-apple-system,sans-serif;margin:0;padding:16px;background:#0d1117;color:#c9d1d9}}
+h1{{font-size:20px;margin:0 0 12px}}table{{border-collapse:collapse;width:100%}}
+td,th{{padding:10px;border-bottom:1px solid #30363d;vertical-align:top;text-align:left}}
+th{{font-size:13px;color:#8b949e;text-transform:uppercase;letter-spacing:.04em}}
+a{{color:#58a6ff;text-decoration:none;display:block;font-size:14px}}
+tr.ok td{{background:#0d2818}}tr.no td{{background:#2d1416;opacity:.7}}i{{color:#8b949e;display:block;font-size:14px}}
+@media (max-width:640px){{
+  body{{padding:12px}}
+  thead{{display:none}}
+  tr{{display:block;margin:0 0 12px;border:1px solid #30363d;border-radius:10px;overflow:hidden}}
+  td{{display:block;border:0;padding:6px 12px}}
+  td[data-l="repo"]{{padding-top:12px}}
+  td[data-l="what"]{{padding-bottom:12px}}
+  td[data-l="stars"]::before{{content:"★ " attr(data-l) ": ";color:#8b949e}}
+  td[data-l="license"]::before{{content:"license: ";color:#8b949e}}
+  td[data-l="status"]::before{{content:"status: ";color:#8b949e}}
+  td[data-l="stars"],td[data-l="license"],td[data-l="status"]{{display:inline-block;font-size:14px;color:#8b949e}}
+}}
+</style>
+<h1>Repo catalog ({len(catalog)})</h1><table><thead><tr><th>Repo</th><th>Stars</th><th>License</th>
+<th>Status</th><th>Purpose</th></tr></thead><tbody>
+{chr(10).join(rows)}</tbody></table></html>"""
 
 
 def check(write=False):
@@ -162,7 +187,7 @@ def test():
     assert any("ui-ux" in r["repo"] or "taste" in r["repo"] for r in res), "design repos not found"
     assert not search(c, "zzz-nothing-here"), "gibberish query returned results"
     assert all(r["status"] == "missing" for r in search(c, "code", status="missing"))
-    # Indonesian queries must resolve through the synonym map (needs a real catalog)
+    # Indonesian queries resolve through the synonym map (needs a real catalog)
     if len(c) >= 20:
         for q in ("kode", "desain", "video", "presentasi", "tulisan", "memori", "peta"):
             assert search(c, q), f"Indonesian query '{q}' returned nothing"
