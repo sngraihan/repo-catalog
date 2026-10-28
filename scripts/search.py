@@ -38,6 +38,13 @@ SYNONYM = {
     "web": "web", "desainer": "design", "tabel": "document excel spreadsheet",
     "excel": "excel spreadsheet", "word": "word document", "pdf": "pdf document",
     "reels": "video reels short", "animasi": "video animation",
+    # words that name the ACTION rather than the artifact - found by false-negative
+    # testing 28/10: "bongkar desain website" and "panduan ui web" both returned only
+    # the three big design skills while the actually-correct repo sat outside the top 3
+    "bongkar": "extract teardown", "tiru": "extract clone reference",
+    "contek": "extract clone reference", "sontek": "extract clone reference",
+    "panduan": "guidelines rules", "aturan": "guidelines rules", "pedoman": "guidelines rules",
+    "cek": "audit review", "periksa": "audit review", "nilai": "audit review",
 }
 
 
@@ -187,10 +194,34 @@ def test():
     assert any("ui-ux" in r["repo"] or "taste" in r["repo"] for r in res), "design repos not found"
     assert not search(c, "zzz-nothing-here"), "gibberish query returned results"
     assert all(r["status"] == "missing" for r in search(c, "code", status="missing"))
-    # Indonesian queries resolve through the synonym map (needs a real catalog)
+    # owner searches in Indonesian: these must all find something
+    for q in ("kode", "desain", "video", "presentasi", "tulisan", "memori", "peta"):
+        assert search(c, q), f"Indonesian query '{q}' returned nothing"
+    # every one of these must reach the intended repo in the top 3.
+    # 2026-10-28: the first run of this list failed on 2 of 15, which is the whole
+    # point of having it - a false negative is invisible unless something checks.
+    must_find = [
+        ("bikin video dari html", "heygen-com/hyperframes"),
+        ("presentasi sidang", "hugohe3/ppt-master"),
+        ("cari kerjaan loker", "career-ops-hq/career-ops"),
+        ("riset tren pasar", "mvanhorn/last30days-skill"),
+        ("baca internet tanpa api", "Panniantong/Agent-Reach"),
+        ("animasi scroll website", "greensock/gsap-skills"),
+        ("komponen animasi react", "DavidHDev/react-bits"),
+        ("transisi modal dropdown", "Jakubantalik/transitions.dev"),
+        ("bongkar desain website", "Manavarya09/design-extract"),
+        ("cek keamanan aplikasi", "usestrix/strix"),
+        ("peta kode", "Graphify-Labs/graphify"),
+        ("naskah skripsi", "nothinx/naskah-id"),
+        ("hemat token", "JuliusBrussee/caveman"),
+        ("logo produk", "kaankiziltug/logo-design-skill"),
+        ("panduan ui web", "vercel-labs/web-interface-guidelines"),
+    ]
     if len(c) >= 20:
-        for q in ("kode", "desain", "video", "presentasi", "tulisan", "memori", "peta"):
-            assert search(c, q), f"Indonesian query '{q}' returned nothing"
+        missed = [f"{q} -> {want}" for q, want in must_find
+                  if want not in [r["repo"] for r in search(c, q)[:3]]]
+        assert not missed, "queries that lost their intended repo: " + "; ".join(missed)
+
     # a long query must not drag in repos that share one generic word
     long_q = search(c, "website ui ux redesign landing page prettier")
     names = [r["repo"] for r in long_q]
