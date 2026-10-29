@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Search the repo catalog. stdlib only, no network.
+"""Search the office repo catalog. stdlib only, no network.
 
   search.py "ui ux"                 search
   search.py "video" --status missing
   search.py --all                   dump whole catalog
-  search.py "slides" --web          HTML page
+  search.py "slides" --web          HTML page for the owner
   search.py --check [--write]       re-verify against GitHub API
   search.py --test                  self-check
 """
@@ -204,7 +204,7 @@ def check(write=False):
 
 def test():
     c = load()
-    assert len(c) >= 1, "catalog is empty"
+    assert len(c) >= 20, f"catalog too small: {len(c)}"
     assert all("repo" in r and "purpose" in r for r in c), "row missing repo/purpose"
     assert all(r["status"] in ("installed", "missing", "rejected") for r in c), "bad status value"
     assert all(r.get("rejected_reason") for r in c if r["status"] == "rejected"), "rejected row without reason"

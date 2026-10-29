@@ -60,7 +60,7 @@ Those four failure modes cost real time. A JSONL file that takes one command to 
 
 ## Data
 
-`data/catalog.jsonl` ships with three example rows and is otherwise empty. It is meant to be yours: fill it with what your own work actually reaches for. The rows that matter most are the ones marked `rejected` — a rejection with a reason is a decision you never have to make twice.
+`data/catalog.jsonl` ships with 52 rows collected from real work: stars, license, purpose, when to use, when not to use, install status, and the reason behind every rejection. Copy it as a starting point, or empty it out and fill it with what your own work reaches for. The rows that matter most are the ones marked `rejected` — a rejection with a reason is a decision you never have to make twice.
 
 ## License
 
